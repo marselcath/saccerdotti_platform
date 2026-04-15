@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Saccerdotti Platform</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; background: #f0f2f5; }
+        .sidebar { width: 280px; background: #1a1a2e; color: white; height: 100vh; padding: 20px; position: fixed; box-sizing: border-box; }
+        .content { margin-left: 280px; padding: 40px; width: 100%; box-sizing: border-box; }
+        .video-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto; }
+        .video-frame { background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 20px; aspect-ratio: 16/9; }
+        h1 { color: #1a1a2e; margin-top: 0; }
+        .hw-box { background: #fff9db; padding: 15px; border-left: 5px solid #fcc419; border-radius: 5px; margin-bottom: 20px; }
+        .submission-box { background: #e8f0fe; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        textarea { width: 100%; border: 1px solid #ccc; border-radius: 8px; padding: 10px; font-family: inherit; resize: vertical; box-sizing: border-box; }
+        .btn-submit { background: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .btn-submit:hover { background: #218838; }
+        .badge { background: #1a73e8; color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 10px 0; border-bottom: 1px solid #2c3e50; }
+        a { color: #4dabf7; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Saccerdotti</h2>
+        <p>👨‍🎓 Ученик: {{ user_name }}</p>
+        <hr>
+        <p><a href="/">⬅ На главную</a></p>
+        <h3>Уроки курса:</h3>
+        <ul>
+            {% for lesson in lessons %}
+            <li>
+                <a href="/view/lesson/{{ lesson.id }}">📖 {{ lesson.title }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="content">
+        <div class="video-card">
+            {% if current_lesson %}
+                <span class="badge">Урок ID: {{ current_lesson.id }}</span>
+                <h1>{{ current_lesson.title }}</h1>
+                
+                <div class="video-frame">
+                    <iframe src="{{ current_lesson.video_url }}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>
+                </div>
+
+                <h3>📝 Задание к уроку</h3>
+                <div class="hw-box">
+                    {{ homework_text }}
+                </div>
+
+                <div class="submission-box">
+                    <h3>📤 Сдать решение</h3>
+                    <form action="/submit/{{ current_lesson.id }}" method="post">
+                        <textarea name="submission_text" rows="5" placeholder="Вставь сюда текст решения или ссылку на Google Диск..."></textarea>
+                        <button type="submit" class="btn-submit">Отправить преподавателю</button>
+                    </form>
+                </div>
+                
+                <p style="margin-top: 20px;">
+                    <a href="{{ current_lesson.board_link }}" target="_blank">🔗 Открыть интерактивную доску (Miro/Другое)</a>
+                </p>
+            {% else %}
+                <h1>Урок не выбран</h1>
+                <p>Пожалуйста, выбери урок из списка слева.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
+
+<div class="materials-section">
+    <h3>📚 Материалы к уроку</h3>
+    {% if lesson.classwork_pdf %}
+        <a href="{{ lesson.classwork_pdf }}" target="_blank" class="btn-pdf">📂 Классная работа (PDF)</a>
+    {% endif %}
+    
+    {% if lesson.homework_pdf %}
+        <a href="{{ lesson.homework_pdf }}" target="_blank" class="btn-pdf">📝 Домашнее задание (PDF)</a>
+    {% endif %}
+</div>
+
+<div class="submit-section">
+    <h3>📤 Сдать работу</h3>
+    <form action="/submit/{{ lesson.id }}" method="post">
+        <input type="text" name="student_name" placeholder="Твое имя" required>
+        <textarea name="comment" placeholder="Комментарий к работе"></textarea>
+        <input type="url" name="files_url" placeholder="Ссылка на фото/PDF (Google Диск или Облако)" required>
+        <button type="submit">Отправить на проверку</button>
+    </form>
+</div>
+
+<form action="/submit/{{ lesson.id }}" method="post" enctype="multipart/form-data">
+    <input type="text" name="student_name" placeholder="Твое имя" required>
+    <textarea name="comment" placeholder="Комментарий"></textarea>
+    
+    <label>Прикрепить файлы (фото, PDF, DOCX):</label>
+    <input type="file" name="files" multiple required>
+    
+    <button type="submit">Отправить на проверку</button>
+</form>
