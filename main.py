@@ -10,9 +10,12 @@ from typing import List
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+# Создаем таблицы при запуске (теперь ошибка 'no such table' не появится)
 database.Base.metadata.create_all(bind=database.engine)
 
 # Настройка Cloudinary
+# ВНИМАНИЕ: в будущем эти ключи нужно будет вынести в .env файл для безопасности!
 cloudinary.config(
     cloud_name="dxtzqbydm",
     api_key="371626272653482",
@@ -32,7 +35,12 @@ def get_db():
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     courses = db.query(database.Course).all()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "courses": courses})
+    # ИСПРАВЛЕНО: request теперь передается отдельным параметром
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html", 
+        context={"courses": courses}
+    )
 
 @app.get("/view/lesson/{lesson_id}", response_class=HTMLResponse)
 def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db)):
@@ -43,12 +51,16 @@ def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db))
     # Получаем все уроки этого курса для бокового меню
     lessons = db.query(database.Lesson).filter(database.Lesson.course_id == lesson.course_id).all()
     
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "current_lesson": lesson,
-        "lessons": lessons,
-        "user_name": "Марсель"  # Пока захардкодим, пока нет регистрации
-    })
+    # ИСПРАВЛЕНО: request передается отдельным параметром
+    return templates.TemplateResponse(
+        request=request, 
+        name="index.html", 
+        context={
+            "current_lesson": lesson,
+            "lessons": lessons,
+            "user_name": "Марсель"  
+        }
+    )
 
 # --- АДМИН-ПАНЕЛЬ (Управление) ---
 
