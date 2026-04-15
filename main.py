@@ -1,28 +1,24 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, UploadFile, File
+import os
+from fastapi import FastAPI, Depends, HTTPException, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import database
-from datetime import datetime
 import cloudinary
 import cloudinary.uploader
 from typing import List
 
-# --- НАСТРОЙКИ CLOUDINARY ---
-# ОБЯЗАТЕЛЬНО: Проверь свой API Secret перед пушем!
-cloudinary.config( 
-    cloud_name = "dxtzqbydm", 
-    api_key = "123456789012345", 
-    api_secret = "ТВОЙ_API_SECRET_ЗДЕСЬ", 
-    secure = True
-)
-
-app = FastAPI(title="Saccerdotti Platform")
+app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Создаем таблицы (используем v2 для чистого старта)
-database.Base.metadata.create_all(bind=database.engine)
+# Настройка Cloudinary
+cloudinary.config(
+    cloud_name="dxtzqbydm",
+    api_key="371626272653482",
+    api_secret="0SoQUMOI04hLrjnIB49bU28dy80"
+)
 
+# Функция для получения сессии БД
 def get_db():
     db = database.SessionLocal()
     try:
@@ -30,125 +26,63 @@ def get_db():
     finally:
         db.close()
 
-# --- ИНТЕРФЕЙС УЧЕНИКА ---
+# --- КЛИЕНТСКАЯ ЧАСТЬ (Сайт) ---
 
-@app.get("/", response_class=HTMLResponse, tags=["Интерфейс"])
-def show_dashboard(request: Request, db: Session = Depends(get_db)):
-    all_courses = db.query(database.Course).all()
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"courses": all_courses}
-    )
+@app.get("/", response_class=HTMLResponse)
+def dashboard(request: Request, db: Session = Depends(get_db)):
+    courses = db.query(database.Course).all()
+    return templates.TemplateResponse("dashboard.html", {"request": request, "courses": courses})
 
-@app.get("/view/lesson/{lesson_id}", response_class=HTMLResponse, tags=["Интерфейс"])
-def view_lesson_page(request: Request, lesson_id: int, db: Session = Depends(get_db)):
+@app.get("/view/lesson/{lesson_id}", response_class=HTMLResponse)
+def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db)):
     lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Урок не найден")
     
-    course = db.query(database.Course).filter(database.Course.id == lesson.course_id).first()
-    all_lessons = db.query(database.Lesson).filter(database.Lesson.course_id == lesson.course_id).all()
+    # Получаем все уроки этого курса для бокового меню
+    lessons = db.query(database.Lesson).filter(database.Lesson.course_id == lesson.course_id).all()
     
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "user_name": "Марсель",
-            "course_title": course.title if course else "Курс",
-            "lessons": all_lessons,
-            "current_lesson": lesson
-        }
-    )
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "current_lesson": lesson,
+        "lessons": lessons,
+        "user_name": "Марсель"  # Пока захардкодим, пока нет регистрации
+    })
 
-@app.post("/submit/{lesson_id}", tags=["Интерфейс"])
-async def submit_homework(
-    lesson_id: int,
-    student_name: str = Form(...),
-    comment: str = Form(None),
-    files: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
-):
-    uploaded_urls = []
-    
-    for file in files:
-        if file.filename:
-            result = cloudinary.uploader.upload(file.file, resource_type="auto")
-            uploaded_urls.append(result['secure_url'])
-    
-    file_links = ", ".join(uploaded_urls)
-    
-    new_submission = database.StudentSubmission(
-        lesson_id=lesson_id,
-        student_name=student_name,
-        comment=comment,
-        files_url=file_links
-    )
-    db.add(new_submission)
-    db.commit()
-    
-    return RedirectResponse(url=f"/view/lesson/{lesson_id}", status_code=303)
-
-# --- АДМИН-ПАНЕЛЬ ---
+# --- АДМИН-ПАНЕЛЬ (Управление) ---
 
 @app.post("/courses/", tags=["Админка"])
-def create_course(title: str, description: str, db: Session = Depends(get_db)):
-    db_course = database.Course(title=title, description=description)
-    db.add(db_course)
+def add_course(title: str, description: str, db: Session = Depends(get_db)):
+    new_course = database.Course(title=title, description=description)
+    db.add(new_course)
     db.commit()
-    return {"message": "Курс создан", "id": db_course.id}
+    return {"message": "Курс создан", "id": new_course.id}
 
 @app.post("/lessons/", tags=["Админка"])
 def add_lesson(
-    course_id: int, 
-    title: str, 
-    video: str, 
-    board: str, 
-    classwork_pdf: str = None, 
-    homework_pdf: str = None, 
+    course_id: int, title: str, video: str, board: str, 
+    meeting: str = None, classwork_pdf: str = None, homework_pdf: str = None, 
     db: Session = Depends(get_db)
 ):
     new_lesson = database.Lesson(
-        course_id=course_id, 
-        title=title, 
-        video_url=video, 
-        board_link=board,
-        classwork_pdf=classwork_pdf,
-        homework_pdf=homework_pdf
+        course_id=course_id, title=title, video_url=video, 
+        board_link=board, meeting_link=meeting,
+        classwork_pdf=classwork_pdf, homework_pdf=homework_pdf
     )
     db.add(new_lesson)
     db.commit()
     return {"message": "Урок добавлен", "id": new_lesson.id}
 
-@app.get("/admin/submissions", tags=["Админка"])
-def view_submissions(db: Session = Depends(get_db)):
-    return db.query(database.StudentSubmission).all()
-
-@app.delete("/courses/{course_id}", tags=["Админка"])
-def delete_course(course_id: int, db: Session = Depends(get_db)):
-    course = db.query(database.Course).filter(database.Course.id == course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Курс не найден")
-    db.delete(course)
-    db.commit()
-    return {"message": f"Курс {course_id} удален"}
-
 @app.put("/lessons/{lesson_id}", tags=["Админка"])
 def update_lesson(
-    lesson_id: int,
-    title: str = None,
-    video: str = None,
-    board: str = None,
-    meeting: str = None,
-    classwork_pdf: str = None,
-    homework_pdf: str = None,
+    lesson_id: int, title: str = None, video: str = None, board: str = None,
+    meeting: str = None, classwork_pdf: str = None, homework_pdf: str = None,
     db: Session = Depends(get_db)
 ):
     lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Урок не найден")
     
-    # Обновляем только те поля, которые ты передал
     if title: lesson.title = title
     if video: lesson.video_url = video
     if board: lesson.board_link = board
@@ -164,7 +98,31 @@ def delete_lesson(lesson_id: int, db: Session = Depends(get_db)):
     lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Урок не найден")
-    
     db.delete(lesson)
     db.commit()
-    return {"message": f"Урок {lesson_id} и все его связи удалены"}
+    return {"message": "Урок удален"}
+
+# --- ПРИЕМ ЗАДАНИЙ ---
+
+@app.post("/submit/{lesson_id}")
+async def submit_homework(
+    lesson_id: int, 
+    student_name: str = Form(...), 
+    comment: str = Form(None), 
+    files: List[UploadFile] = File(...), 
+    db: Session = Depends(get_db)
+):
+    file_urls = []
+    for file in files:
+        result = cloudinary.uploader.upload(file.file)
+        file_urls.append(result['secure_url'])
+    
+    new_submission = database.StudentSubmission(
+        lesson_id=lesson_id,
+        student_name=student_name,
+        comment=comment,
+        files_url=",".join(file_urls)
+    )
+    db.add(new_submission)
+    db.commit()
+    return RedirectResponse(url=f"/view/lesson/{lesson_id}", status_code=303)
