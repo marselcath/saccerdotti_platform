@@ -10,6 +10,7 @@ from typing import List
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+database.Base.metadata.create_all(bind=database.engine)
 
 # Настройка Cloudinary
 cloudinary.config(
