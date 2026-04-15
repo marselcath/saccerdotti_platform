@@ -2,37 +2,136 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мои курсы | Saccerdotti</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
-        .header { background: #1a1a2e; color: white; padding: 40px 20px; text-align: center; }
-        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .course-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s; display: flex; flex-direction: column; }
-        .course-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-        .course-card h2 { margin-top: 0; color: #1a73e8; }
-        .course-card p { flex-grow: 1; color: #555; }
-        .btn { display: block; text-align: center; background: #1a73e8; color: white; padding: 12px; border-radius: 8px; text-decoration: none; margin-top: 15px; font-weight: bold; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            background: #f0f2f5; 
+            color: #1a1a2e; 
+        }
+        .header { 
+            background: #1a1a2e; 
+            color: white; 
+            padding: 60px 20px; 
+            text-align: center; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header h1 { 
+            margin: 0; 
+            font-size: 2.5em; 
+            letter-spacing: 1px;
+        }
+        .header p { 
+            opacity: 0.8; 
+            font-size: 1.1em; 
+            margin-top: 10px;
+        }
+        .container { 
+            max-width: 1100px; 
+            margin: -30px auto 40px; 
+            padding: 0 20px; 
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
+            gap: 25px; 
+        }
+        .course-card { 
+            background: white; 
+            border-radius: 16px; 
+            padding: 30px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+            transition: all 0.3s ease; 
+            display: flex; 
+            flex-direction: column; 
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .course-card:hover { 
+            transform: translateY(-10px); 
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15); 
+        }
+        .course-id-badge {
+            display: inline-block;
+            background: #e8f0fe;
+            color: #1a73e8;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            align-self: flex-start;
+        }
+        .course-card h2 { 
+            margin: 0 0 15px 0; 
+            color: #1a1a2e; 
+            font-size: 1.4em;
+            line-height: 1.3;
+        }
+        .course-card p { 
+            flex-grow: 1; 
+            color: #5f6368; 
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .btn { 
+            display: block; 
+            text-align: center; 
+            background: #1a73e8; 
+            color: white; 
+            padding: 14px; 
+            border-radius: 10px; 
+            text-decoration: none; 
+            font-weight: 600; 
+            transition: background 0.2s;
+        }
+        .btn:hover { 
+            background: #1557b0; 
+        }
+        .no-lessons { 
+            text-align: center; 
+            color: #9aa0a6; 
+            font-style: italic;
+            padding: 14px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .admin-note {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Платформа Saccerdotti</h1>
-        <p>Добро пожаловать, Марсель! Твои учебные курсы:</p>
+        <p>Добро пожаловать, {{ user_name }}! Твои учебные курсы:</p>
     </div>
+
     <div class="container">
         <div class="grid">
             {% for course in courses %}
             <div class="course-card">
+                <div class="course-id-badge">ID Курса: {{ course.id }}</div>
+                
                 <h2>{{ course.title }}</h2>
-                <p>{{ course.description }}</p>
+                
+                <p>{{ course.description if course.description else "Описание курса пока не добавлено." }}</p>
+                
                 {% if course.lessons %}
-                    <a href="/view/lesson/{{ course.lessons[0].id }}" class="btn">Открыть курс</a>
+                    <a href="/view/lesson/{{ course.lessons[0].id }}" class="btn">Начать обучение</a>
                 {% else %}
-                    <span style="color: #999; text-align: center; margin-top: 15px;">В курсе пока нет уроков</span>
+                    <div class="no-lessons">В этом курсе еще нет уроков</div>
                 {% endif %}
             </div>
             {% endfor %}
+        </div>
+        
+        <div class="admin-note">
+            <p>Нужно добавить контент? Используй <a href="/docs" target="_blank" style="color: #1a73e8;">Swagger UI (Панель управления)</a></p>
         </div>
     </div>
 </body>
