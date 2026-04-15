@@ -11,8 +11,6 @@ from passlib.context import CryptContext
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-
-# Хеширование паролей
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Инициализация БД
@@ -32,7 +30,7 @@ def get_db():
     finally:
         db.close()
 
-# --- МАРШРУТЫ ---
+# --- МАРШРУТЫ ГЛАВНОЙ СТРАНИЦЫ ---
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
@@ -49,7 +47,26 @@ def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db))
         "current_lesson": lesson, "lessons": lessons, "user_name": "Марсель"
     })
 
-# --- РЕГИСТРАЦИЯ И ВХОД ---
+# --- АДМИНКА (ВОЗВРАЩАЕМ КНОПКИ) ---
+
+@app.post("/courses/")
+def add_course(title: str, description: str = None, db: Session = Depends(get_db)):
+    new_course = database.Course(title=title, description=description)
+    db.add(new_course)
+    db.commit()
+    return {"message": "Курс создан"}
+
+@app.post("/lessons/")
+def add_lesson(course_id: int, title: str, video: str, board: str, classwork_pdf: str = None, homework_pdf: str = None, db: Session = Depends(get_db)):
+    new_lesson = database.Lesson(
+        course_id=course_id, title=title, video=video, 
+        board=board, classwork_pdf=classwork_pdf, homework_pdf=homework_pdf
+    )
+    db.add(new_lesson)
+    db.commit()
+    return {"message": "Урок добавлен"}
+
+# --- РЕГИСТРАЦИЯ И ВХОД (С ФИКСАМИ) ---
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
@@ -58,17 +75,19 @@ def register_page(request: Request):
 @app.post("/register")
 def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     try:
+        # Фикс ошибки 72 байт: обрезаем пароль, если он слишком длинный
+        safe_password = password[:71] 
+        
         existing_user = db.query(database.User).filter(database.User.username == username).first()
         if existing_user:
-            return HTMLResponse(content="<h3>Пользователь уже существует</h3><a href='/register'>Назад</a>", status_code=400)
+            return HTMLResponse(content="<h3>Логин занят</h3><a href='/register'>Назад</a>", status_code=400)
         
-        hashed = pwd_context.hash(password)
+        hashed = pwd_context.hash(safe_password)
         new_user = database.User(username=username, hashed_password=hashed)
         db.add(new_user)
         db.commit()
         return RedirectResponse(url="/login", status_code=303)
     except Exception as e:
-        # Если база данных "ругнется", мы увидим причину
         return HTMLResponse(content=f"<h3>Ошибка БД: {e}</h3>", status_code=500)
 
 @app.get("/login", response_class=HTMLResponse)
@@ -78,8 +97,8 @@ def login_page(request: Request):
 @app.post("/login")
 def login_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(database.User).filter(database.User.username == username).first()
-    if not user or not pwd_context.verify(password, user.hashed_password):
-        return HTMLResponse(content="<h3>Неверный логин или пароль</h3><a href='/login'>Назад</a>", status_code=401)
+    if not user or not pwd_context.verify(password[:71], user.hashed_password):
+        return HTMLResponse(content="<h3>Неверный вход</h3><a href='/login'>Назад</a>", status_code=401)
     return RedirectResponse(url="/", status_code=303)
 
 # --- ПРИЕМ ЗАДАНИЙ ---
