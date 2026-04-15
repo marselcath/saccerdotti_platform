@@ -5,13 +5,14 @@
     <title>Мои курсы | Saccerdotti</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f2f5; color: #1a1a2e; }
-        .header { background: #1a1a2e; color: white; padding: 20px 40px; text-align: center; }
+        .header { background: #1a1a2e; color: white; padding: 40px 20px; text-align: center; }
         .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .course-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s; }
+        .course-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s; display: flex; flex-direction: column; }
         .course-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
         .course-card h2 { margin-top: 0; color: #1a73e8; }
-        .btn { display: inline-block; background: #1a73e8; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-top: 10px; }
+        .course-card p { flex-grow: 1; color: #555; }
+        .btn { display: block; text-align: center; background: #1a73e8; color: white; padding: 12px; border-radius: 8px; text-decoration: none; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -25,7 +26,11 @@
             <div class="course-card">
                 <h2>{{ course.title }}</h2>
                 <p>{{ course.description }}</p>
-                <a href="/course/{{ course.id }}" class="btn">Открыть курс</a>
+                {% if course.lessons %}
+                    <a href="/view/lesson/{{ course.lessons[0].id }}" class="btn">Открыть курс</a>
+                {% else %}
+                    <span style="color: #999; text-align: center; margin-top: 15px;">В курсе пока нет уроков</span>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
