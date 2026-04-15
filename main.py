@@ -7,6 +7,9 @@ import database
 import cloudinary
 import cloudinary.uploader
 from typing import List
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -139,3 +142,43 @@ async def submit_homework(
     db.add(new_submission)
     db.commit()
     return RedirectResponse(url=f"/view/lesson/{lesson_id}", status_code=303)
+
+# --- СИСТЕМА РЕГИСТРАЦИИ ---
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse(request=request, name="register.html", context={})
+
+@app.post("/register")
+def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    # Проверяем, нет ли уже такого пользователя
+    existing_user = db.query(database.User).filter(database.User.username == username).first()
+    if existing_user:
+        return "Пользователь с таким именем уже существует"
+    
+    # Хешируем пароль и сохраняем
+    hashed = pwd_context.hash(password)
+    new_user = database.User(username=username, hashed_password=hashed)
+    db.add(new_user)
+    db.commit()
+    return RedirectResponse(url="/login", status_code=303)
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html", context={})
+
+@app.post("/login")
+def login_user(
+    username: str = Form(...), 
+    password: str = Form(...), 
+    db: Session = Depends(get_db)
+):
+    user = db.query(database.User).filter(database.User.username == username).first()
+    
+    # Проверяем: есть ли пользователь и совпадает ли пароль
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        return "Неверное имя пользователя или пароль" # В будущем сделаем красивую ошибку
+    
+    # Если всё ок — пускаем на главную
+    # Пока мы просто редиректим, но следующим шагом добавим COOKIES, чтобы браузер "запомнил" вход
+    return RedirectResponse(url="/", status_code=303)
