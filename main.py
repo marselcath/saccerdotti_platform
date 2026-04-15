@@ -9,23 +9,22 @@ import cloudinary.uploader
 from typing import List
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Создаем таблицы при запуске (теперь ошибка 'no such table' не появится)
+# Хеширование паролей
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Инициализация БД
 database.Base.metadata.create_all(bind=database.engine)
 
 # Настройка Cloudinary
-# ВНИМАНИЕ: в будущем эти ключи нужно будет вынести в .env файл для безопасности!
 cloudinary.config(
     cloud_name="dxtzqbydm",
     api_key="371626272653482",
     api_secret="0SoQUMOI04hLrjnIB49bU28dy80"
 )
 
-# Функция для получения сессии БД
 def get_db():
     db = database.SessionLocal()
     try:
@@ -33,152 +32,65 @@ def get_db():
     finally:
         db.close()
 
-# --- КЛИЕНТСКАЯ ЧАСТЬ (Сайт) ---
+# --- МАРШРУТЫ ---
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     courses = db.query(database.Course).all()
-    # ИСПРАВЛЕНО: request теперь передается отдельным параметром
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html", 
-        context={"courses": courses}
-    )
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={"courses": courses})
 
 @app.get("/view/lesson/{lesson_id}", response_class=HTMLResponse)
 def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db)):
     lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
     if not lesson:
         raise HTTPException(status_code=404, detail="Урок не найден")
-    
-    # Получаем все уроки этого курса для бокового меню
     lessons = db.query(database.Lesson).filter(database.Lesson.course_id == lesson.course_id).all()
-    
-    # ИСПРАВЛЕНО: request передается отдельным параметром
-    return templates.TemplateResponse(
-        request=request, 
-        name="index.html", 
-        context={
-            "current_lesson": lesson,
-            "lessons": lessons,
-            "user_name": "Марсель"  
-        }
-    )
+    return templates.TemplateResponse(request=request, name="index.html", context={
+        "current_lesson": lesson, "lessons": lessons, "user_name": "Марсель"
+    })
 
-# --- АДМИН-ПАНЕЛЬ (Управление) ---
+# --- РЕГИСТРАЦИЯ И ВХОД ---
 
-@app.post("/courses/", tags=["Админка"])
-def add_course(title: str, description: str, db: Session = Depends(get_db)):
-    new_course = database.Course(title=title, description=description)
-    db.add(new_course)
-    db.commit()
-    return {"message": "Курс создан", "id": new_course.id}
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    return templates.TemplateResponse(request=request, name="register.html")
 
-@app.post("/lessons/", tags=["Админка"])
-def add_lesson(
-    course_id: int, title: str, video: str, board: str, 
-    meeting: str = None, classwork_pdf: str = None, homework_pdf: str = None, 
-    db: Session = Depends(get_db)
-):
-    new_lesson = database.Lesson(
-        course_id=course_id, title=title, video_url=video, 
-        board_link=board, meeting_link=meeting,
-        classwork_pdf=classwork_pdf, homework_pdf=homework_pdf
-    )
-    db.add(new_lesson)
-    db.commit()
-    return {"message": "Урок добавлен", "id": new_lesson.id}
+@app.post("/register")
+def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    try:
+        existing_user = db.query(database.User).filter(database.User.username == username).first()
+        if existing_user:
+            return HTMLResponse(content="<h3>Пользователь уже существует</h3><a href='/register'>Назад</a>", status_code=400)
+        
+        hashed = pwd_context.hash(password)
+        new_user = database.User(username=username, hashed_password=hashed)
+        db.add(new_user)
+        db.commit()
+        return RedirectResponse(url="/login", status_code=303)
+    except Exception as e:
+        # Если база данных "ругнется", мы увидим причину
+        return HTMLResponse(content=f"<h3>Ошибка БД: {e}</h3>", status_code=500)
 
-@app.put("/lessons/{lesson_id}", tags=["Админка"])
-def update_lesson(
-    lesson_id: int, title: str = None, video: str = None, board: str = None,
-    meeting: str = None, classwork_pdf: str = None, homework_pdf: str = None,
-    db: Session = Depends(get_db)
-):
-    lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
-    if not lesson:
-        raise HTTPException(status_code=404, detail="Урок не найден")
-    
-    if title: lesson.title = title
-    if video: lesson.video_url = video
-    if board: lesson.board_link = board
-    if meeting: lesson.meeting_link = meeting
-    if classwork_pdf: lesson.classwork_pdf = classwork_pdf
-    if homework_pdf: lesson.homework_pdf = homework_pdf
-    
-    db.commit()
-    return {"message": f"Урок {lesson_id} успешно обновлен"}
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html")
 
-@app.delete("/lessons/{lesson_id}", tags=["Админка"])
-def delete_lesson(lesson_id: int, db: Session = Depends(get_db)):
-    lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
-    if not lesson:
-        raise HTTPException(status_code=404, detail="Урок не найден")
-    db.delete(lesson)
-    db.commit()
-    return {"message": "Урок удален"}
+@app.post("/login")
+def login_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(database.User).filter(database.User.username == username).first()
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        return HTMLResponse(content="<h3>Неверный логин или пароль</h3><a href='/login'>Назад</a>", status_code=401)
+    return RedirectResponse(url="/", status_code=303)
 
 # --- ПРИЕМ ЗАДАНИЙ ---
 
 @app.post("/submit/{lesson_id}")
-async def submit_homework(
-    lesson_id: int, 
-    student_name: str = Form(...), 
-    comment: str = Form(None), 
-    files: List[UploadFile] = File(...), 
-    db: Session = Depends(get_db)
-):
+async def submit_homework(lesson_id: int, student_name: str = Form(...), comment: str = Form(None), files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
     file_urls = []
     for file in files:
         result = cloudinary.uploader.upload(file.file)
         file_urls.append(result['secure_url'])
-    
-    new_submission = database.StudentSubmission(
-        lesson_id=lesson_id,
-        student_name=student_name,
-        comment=comment,
-        files_url=",".join(file_urls)
-    )
+    new_submission = database.StudentSubmission(lesson_id=lesson_id, student_name=student_name, comment=comment, files_url=",".join(file_urls))
     db.add(new_submission)
     db.commit()
     return RedirectResponse(url=f"/view/lesson/{lesson_id}", status_code=303)
-
-# --- СИСТЕМА РЕГИСТРАЦИИ ---
-
-@app.get("/register", response_class=HTMLResponse)
-def register_page(request: Request):
-    return templates.TemplateResponse(request=request, name="register.html", context={})
-
-@app.post("/register")
-def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    # Проверяем, нет ли уже такого пользователя
-    existing_user = db.query(database.User).filter(database.User.username == username).first()
-    if existing_user:
-        return "Пользователь с таким именем уже существует"
-    
-    # Хешируем пароль и сохраняем
-    hashed = pwd_context.hash(password)
-    new_user = database.User(username=username, hashed_password=hashed)
-    db.add(new_user)
-    db.commit()
-    return RedirectResponse(url="/login", status_code=303)
-
-@app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse(request=request, name="login.html", context={})
-
-@app.post("/login")
-def login_user(
-    username: str = Form(...), 
-    password: str = Form(...), 
-    db: Session = Depends(get_db)
-):
-    user = db.query(database.User).filter(database.User.username == username).first()
-    
-    # Проверяем: есть ли пользователь и совпадает ли пароль
-    if not user or not pwd_context.verify(password, user.hashed_password):
-        return "Неверное имя пользователя или пароль" # В будущем сделаем красивую ошибку
-    
-    # Если всё ок — пускаем на главную
-    # Пока мы просто редиректим, но следующим шагом добавим COOKIES, чтобы браузер "запомнил" вход
-    return RedirectResponse(url="/", status_code=303)
