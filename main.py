@@ -9,17 +9,18 @@ import cloudinary.uploader
 from typing import List
 
 # --- НАСТРОЙКИ CLOUDINARY ---
+# ОБЯЗАТЕЛЬНО: Проверь свой API Secret перед пушем!
 cloudinary.config( 
     cloud_name = "dxtzqbydm", 
-    api_key = "371626272653482", 
-    api_secret = "0SoQUMOI04hLrjnIB49bU28dy80", 
+    api_key = "123456789012345", 
+    api_secret = "ТВОЙ_API_SECRET_ЗДЕСЬ", 
     secure = True
 )
 
 app = FastAPI(title="Saccerdotti Platform")
 templates = Jinja2Templates(directory="templates")
 
-# Создаем таблицы
+# Создаем таблицы (используем v2 для чистого старта)
 database.Base.metadata.create_all(bind=database.engine)
 
 def get_db():
@@ -35,8 +36,9 @@ def get_db():
 def show_dashboard(request: Request, db: Session = Depends(get_db)):
     all_courses = db.query(database.Course).all()
     return templates.TemplateResponse(
-        "dashboard.html", 
-        {"request": request, "courses": all_courses}
+        request=request,
+        name="dashboard.html",
+        context={"courses": all_courses}
     )
 
 @app.get("/view/lesson/{lesson_id}", response_class=HTMLResponse, tags=["Интерфейс"])
@@ -49,17 +51,16 @@ def view_lesson_page(request: Request, lesson_id: int, db: Session = Depends(get
     all_lessons = db.query(database.Lesson).filter(database.Lesson.course_id == lesson.course_id).all()
     
     return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
+        request=request,
+        name="index.html",
+        context={
             "user_name": "Марсель",
-            "course_title": course.title,
+            "course_title": course.title if course else "Курс",
             "lessons": all_lessons,
             "current_lesson": lesson
         }
     )
 
-# ЕДИНАЯ ФУНКЦИЯ ОТПРАВКИ ДЗ (С ФАЙЛАМИ)
 @app.post("/submit/{lesson_id}", tags=["Интерфейс"])
 async def submit_homework(
     lesson_id: int,
@@ -70,9 +71,8 @@ async def submit_homework(
 ):
     uploaded_urls = []
     
-    # Загружаем каждый файл в Cloudinary
     for file in files:
-        if file.filename: # Проверяем, что файл вообще прикреплен
+        if file.filename:
             result = cloudinary.uploader.upload(file.file, resource_type="auto")
             uploaded_urls.append(result['secure_url'])
     
@@ -87,7 +87,6 @@ async def submit_homework(
     db.add(new_submission)
     db.commit()
     
-    # После отправки возвращаем на страницу урока
     return RedirectResponse(url=f"/view/lesson/{lesson_id}", status_code=303)
 
 # --- АДМИН-ПАНЕЛЬ ---
@@ -114,7 +113,7 @@ def add_lesson(
         title=title, 
         video_url=video, 
         board_link=board,
-        classwork_pdf=classwork_pdf, # Теперь можно добавлять ссылки на PDF
+        classwork_pdf=classwork_pdf,
         homework_pdf=homework_pdf
     )
     db.add(new_lesson)
