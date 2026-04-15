@@ -1,4 +1,5 @@
 import os
+import bcrypt # Используем напрямую
 from fastapi import FastAPI, Depends, HTTPException, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -7,11 +8,9 @@ import database
 import cloudinary
 import cloudinary.uploader
 from typing import List
-from passlib.context import CryptContext
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Инициализация БД
 database.Base.metadata.create_all(bind=database.engine)
@@ -30,7 +29,22 @@ def get_db():
     finally:
         db.close()
 
-# --- МАРШРУТЫ ГЛАВНОЙ СТРАНИЦЫ ---
+# --- ФУНКЦИИ ХЕШИРОВАНИЯ ---
+
+def hash_password(password: str) -> str:
+    # bcrypt требует байты, поэтому кодируем в utf-8
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except:
+        return False
+
+# --- МАРШРУТЫ ---
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
@@ -47,7 +61,7 @@ def show_lesson(lesson_id: int, request: Request, db: Session = Depends(get_db))
         "current_lesson": lesson, "lessons": lessons, "user_name": "Марсель"
     })
 
-# --- АДМИНКА (ВОЗВРАЩАЕМ КНОПКИ) ---
+# --- АДМИНКА ---
 
 @app.post("/courses/")
 def add_course(title: str, description: str = None, db: Session = Depends(get_db)):
@@ -66,7 +80,7 @@ def add_lesson(course_id: int, title: str, video: str, board: str, classwork_pdf
     db.commit()
     return {"message": "Урок добавлен"}
 
-# --- РЕГИСТРАЦИЯ И ВХОД (С ФИКСАМИ) ---
+# --- РЕГИСТРАЦИЯ И ВХОД ---
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
@@ -75,20 +89,18 @@ def register_page(request: Request):
 @app.post("/register")
 def register_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     try:
-        # Фикс ошибки 72 байт: обрезаем пароль, если он слишком длинный
-        safe_password = password[:71] 
-        
         existing_user = db.query(database.User).filter(database.User.username == username).first()
         if existing_user:
             return HTMLResponse(content="<h3>Логин занят</h3><a href='/register'>Назад</a>", status_code=400)
         
-        hashed = pwd_context.hash(safe_password)
+        # Используем новую функцию
+        hashed = hash_password(password)
         new_user = database.User(username=username, hashed_password=hashed)
         db.add(new_user)
         db.commit()
         return RedirectResponse(url="/login", status_code=303)
     except Exception as e:
-        return HTMLResponse(content=f"<h3>Ошибка БД: {e}</h3>", status_code=500)
+        return HTMLResponse(content=f"<h3>Ошибка: {e}</h3>", status_code=500)
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -97,11 +109,9 @@ def login_page(request: Request):
 @app.post("/login")
 def login_user(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(database.User).filter(database.User.username == username).first()
-    if not user or not pwd_context.verify(password[:71], user.hashed_password):
-        return HTMLResponse(content="<h3>Неверный вход</h3><a href='/login'>Назад</a>", status_code=401)
+    if not user or not verify_password(password, user.hashed_password):
+        return HTMLResponse(content="<h3>Ошибка входа</h3><a href='/login'>Назад</a>", status_code=401)
     return RedirectResponse(url="/", status_code=303)
-
-# --- ПРИЕМ ЗАДАНИЙ ---
 
 @app.post("/submit/{lesson_id}")
 async def submit_homework(lesson_id: int, student_name: str = Form(...), comment: str = Form(None), files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
