@@ -132,3 +132,39 @@ def delete_course(course_id: int, db: Session = Depends(get_db)):
     db.delete(course)
     db.commit()
     return {"message": f"Курс {course_id} удален"}
+
+@app.put("/lessons/{lesson_id}", tags=["Админка"])
+def update_lesson(
+    lesson_id: int,
+    title: str = None,
+    video: str = None,
+    board: str = None,
+    meeting: str = None,
+    classwork_pdf: str = None,
+    homework_pdf: str = None,
+    db: Session = Depends(get_db)
+):
+    lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+    
+    # Обновляем только те поля, которые ты передал
+    if title: lesson.title = title
+    if video: lesson.video_url = video
+    if board: lesson.board_link = board
+    if meeting: lesson.meeting_link = meeting
+    if classwork_pdf: lesson.classwork_pdf = classwork_pdf
+    if homework_pdf: lesson.homework_pdf = homework_pdf
+    
+    db.commit()
+    return {"message": f"Урок {lesson_id} успешно обновлен"}
+
+@app.delete("/lessons/{lesson_id}", tags=["Админка"])
+def delete_lesson(lesson_id: int, db: Session = Depends(get_db)):
+    lesson = db.query(database.Lesson).filter(database.Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+    
+    db.delete(lesson)
+    db.commit()
+    return {"message": f"Урок {lesson_id} и все его связи удалены"}

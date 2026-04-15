@@ -9,9 +9,8 @@
         .content { margin-left: 280px; padding: 40px; width: 100%; box-sizing: border-box; }
         .video-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto; }
         .video-frame { background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 20px; aspect-ratio: 16/9; }
-        .hw-box { background: #fff9db; padding: 15px; border-left: 5px solid #fcc419; border-radius: 10px; margin: 20px 0; }
         .materials-section { background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 20px 0; border: 1px solid #dee2e6; }
-        .btn-pdf { display: inline-block; background: #e74c3c; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px; font-size: 14px; }
+        .btn-pdf { display: inline-block; background: #e74c3c; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px; font-size: 14px; margin-bottom: 5px; }
         .submission-box { background: #e8f0fe; padding: 20px; border-radius: 10px; margin-top: 30px; }
         input, textarea { width: 100%; margin-bottom: 10px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
         .btn-submit { background: #28a745; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -48,15 +47,22 @@
                 </div>
 
                 <div class="materials-section">
-                    <h3>📚 Материалы к уроку</h3>
+                    <h3>📚 Материалы и ссылки</h3>
+                    
+                    {% if current_lesson.meeting_link %}
+                        <a href="{{ current_lesson.meeting_link }}" target="_blank" style="background: #9b59b6;" class="btn-pdf">🎥 Присоединиться к занятию (Live)</a>
+                    {% endif %}
+
                     {% if current_lesson.classwork_pdf %}
-                        <a href="{{ current_lesson.classwork_pdf }}" target="_blank" class="btn-pdf">📂 Классная работа (PDF)</a>
-                    {% else %}
-                        <span style="color: #666;">Файлы классной работы не добавлены</span>
+                        <a href="{{ current_lesson.classwork_pdf }}" download class="btn-pdf">💾 Скачать классную работу</a>
                     {% endif %}
                     
                     {% if current_lesson.homework_pdf %}
-                        <a href="{{ current_lesson.homework_pdf }}" target="_blank" class="btn-pdf">📝 Текст ДЗ (PDF)</a>
+                        <a href="{{ current_lesson.homework_pdf }}" download class="btn-pdf">📝 Скачать ДЗ</a>
+                    {% endif %}
+
+                    {% if not current_lesson.classwork_pdf and not current_lesson.meeting_link %}
+                        <span style="color: #666;">Дополнительные материалы пока не добавлены.</span>
                     {% endif %}
                 </div>
 
@@ -76,7 +82,7 @@
                 </p>
             {% else %}
                 <h1>Урок не выбран</h1>
-                <p>Пожалуйста, выбери урок из списка слева или добавь уроки в этот курс через админку.</p>
+                <p>Пожалуйста, выбери урок из списка слева.</p>
             {% endif %}
         </div>
     </div>

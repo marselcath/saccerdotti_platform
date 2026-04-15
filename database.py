@@ -9,6 +9,20 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+class Lesson(Base):
+    __tablename__ = "lessons"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    video_url = Column(String)
+    board_link = Column(String)
+    meeting_link = Column(String, nullable=True) # Поле для онлайн-уроков
+    classwork_pdf = Column(String, nullable=True)
+    homework_pdf = Column(String, nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    
+    course = relationship("Course", back_populates="lessons")
+    submissions = relationship("StudentSubmission", back_populates="lesson")
+
 class Course(Base):
     __tablename__ = "courses"
     id = Column(Integer, primary_key=True, index=True)
